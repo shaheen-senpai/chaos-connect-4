@@ -1,0 +1,972 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Chaos Connect 4 — Human vs AI</title>
+<style>
+  /* ---------- Theme ---------- */
+  :root {
+    --bg: #0a0a0a;
+    --bg-2: #111;
+    --panel: #141414;
+    --grid: #1e1e1e;
+    --line: #262626;
+    --text: #e6e6e6;
+    --muted: #8a8a8a;
+    --neon: #39ff14;
+    --neon-dim: #1fa80c;
+    --ai: #ff3b7f;
+    --ai-dim: #a0214d;
+    --warn: #ffcc00;
+  }
+
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'JetBrains Mono', 'Fira Code', ui-monospace, Menlo, Consolas, monospace;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  body {
+    background:
+      radial-gradient(circle at 20% 10%, rgba(57,255,20,0.08), transparent 40%),
+      radial-gradient(circle at 85% 90%, rgba(255,59,127,0.06), transparent 40%),
+      linear-gradient(#0a0a0a, #050505);
+    background-attachment: fixed;
+  }
+
+  .wrap {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 24px;
+  }
+
+  /* ---------- Header ---------- */
+  header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding-bottom: 16px; border-bottom: 1px solid var(--line);
+    margin-bottom: 20px;
+  }
+  .brand {
+    font-weight: 700; letter-spacing: 2px;
+    color: var(--neon); text-shadow: 0 0 10px rgba(57,255,20,0.5);
+    font-size: 14px;
+  }
+  .brand .dot {
+    display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+    background: var(--neon); box-shadow: 0 0 8px var(--neon); margin-right: 8px;
+    animation: pulse 1.4s infinite;
+  }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.35} }
+
+  .header-right { display: flex; gap: 12px; align-items: center; }
+  .icon-btn {
+    background: transparent; color: var(--muted); border: 1px solid var(--line);
+    padding: 6px 10px; border-radius: 4px; cursor: pointer; font-family: inherit;
+    font-size: 12px; letter-spacing: 1px;
+  }
+  .icon-btn:hover { color: var(--neon); border-color: var(--neon); }
+
+  /* ---------- Start / End Screens ---------- */
+  .screen {
+    min-height: 70vh;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    text-align: center; gap: 18px;
+  }
+  .pill {
+    display: inline-block; padding: 6px 14px; border: 1px solid var(--neon);
+    border-radius: 999px; color: var(--neon); font-size: 12px; letter-spacing: 2px;
+    background: rgba(57,255,20,0.05);
+  }
+  h1.title {
+    font-size: clamp(48px, 9vw, 104px); margin: 0; letter-spacing: 4px;
+    line-height: 1; font-weight: 800;
+  }
+  h1.title .vs { color: var(--neon); display: block; font-size: .38em; margin: 10px 0; letter-spacing: 8px; }
+  h1.title .ai { color: var(--ai); text-shadow: 0 0 16px rgba(255,59,127,0.4); }
+  h1.title .human { text-shadow: 0 0 16px rgba(255,255,255,0.2); }
+
+  .tag { color: var(--muted); max-width: 560px; line-height: 1.6; }
+
+  .cta {
+    margin-top: 8px;
+    background: var(--neon); color: #001a00; border: none;
+    padding: 14px 34px; font-family: inherit; font-weight: 700; letter-spacing: 3px;
+    font-size: 14px; cursor: pointer; border-radius: 4px;
+    box-shadow: 0 0 24px rgba(57,255,20,0.5);
+    transition: transform .1s ease, box-shadow .2s ease;
+  }
+  .cta:hover { transform: translateY(-2px); box-shadow: 0 0 36px rgba(57,255,20,0.8); }
+  .cta:active { transform: translateY(0); }
+
+  .rules {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 12px; max-width: 760px; margin-top: 18px;
+  }
+  .rule {
+    border: 1px solid var(--line); padding: 12px 14px; border-radius: 6px;
+    text-align: left; background: rgba(255,255,255,0.02);
+  }
+  .rule b { color: var(--neon); letter-spacing: 1px; }
+  .rule p { margin: 6px 0 0; color: var(--muted); font-size: 13px; line-height: 1.5; }
+
+  /* ---------- Game Layout ---------- */
+  .game {
+    display: grid;
+    grid-template-columns: 1fr 280px;
+    gap: 24px;
+    align-items: start;
+  }
+  @media (max-width: 840px) {
+    .game { grid-template-columns: 1fr; }
+  }
+
+  .topbar {
+    grid-column: 1 / -1;
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 12px 16px; background: var(--panel); border: 1px solid var(--line);
+    border-radius: 6px;
+    gap: 12px; flex-wrap: wrap;
+  }
+  .turn { display: flex; align-items: center; gap: 10px; font-size: 14px; letter-spacing: 1px; }
+  .turn .who {
+    padding: 4px 10px; border-radius: 4px; font-weight: 700;
+    border: 1px solid currentColor;
+  }
+  .turn.human .who { color: var(--neon); box-shadow: 0 0 12px rgba(57,255,20,.3); }
+  .turn.ai .who { color: var(--ai); box-shadow: 0 0 12px rgba(255,59,127,.3); }
+  .score { display: flex; gap: 18px; font-size: 13px; letter-spacing: 1px; }
+  .score .s-h { color: var(--neon); }
+  .score .s-a { color: var(--ai); }
+  .score .s-reset { color: var(--muted); cursor: pointer; border: none; background: none; font-family: inherit; font-size: 11px; }
+  .score .s-reset:hover { color: var(--warn); }
+
+  /* ---------- Board ---------- */
+  .board-wrap {
+    position: relative;
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: 8px; padding: 14px;
+  }
+
+  .board {
+    --cols: 7; --rows: 6;
+    display: grid;
+    grid-template-columns: repeat(var(--cols), 1fr);
+    grid-template-rows: repeat(var(--rows), 1fr);
+    gap: 8px;
+    aspect-ratio: 7 / 6;
+    background:
+      linear-gradient(180deg, #0f1a0f, #0a120a);
+    border-radius: 8px;
+    padding: 10px;
+    position: relative;
+    transition: transform .5s ease;
+  }
+  .board.flipped { transform: scaleY(-1); }
+  .board.flipped .cell .piece { transform: scaleY(-1); } /* keep pieces upright visually */
+  .board.blind { filter: blur(18px) brightness(.4); }
+
+  .cell {
+    background: #050705;
+    border-radius: 50%;
+    position: relative;
+    box-shadow: inset 0 0 0 2px var(--line);
+    overflow: visible;
+  }
+  .cell.hover { box-shadow: inset 0 0 0 2px var(--neon), 0 0 18px rgba(57,255,20,.25); }
+
+  .piece {
+    position: absolute; inset: 6%;
+    border-radius: 50%;
+    transition: transform .35s cubic-bezier(.3,1.4,.5,1);
+  }
+  .piece.human {
+    background: radial-gradient(circle at 30% 30%, #a9ffa0, var(--neon) 55%, var(--neon-dim));
+    box-shadow: 0 0 14px rgba(57,255,20,.55), inset 0 0 10px rgba(0,0,0,.3);
+  }
+  .piece.ai {
+    background: radial-gradient(circle at 30% 30%, #ffb3cf, var(--ai) 55%, var(--ai-dim));
+    box-shadow: 0 0 14px rgba(255,59,127,.55), inset 0 0 10px rgba(0,0,0,.3);
+  }
+  .piece.win { animation: winPulse .9s infinite; }
+  @keyframes winPulse {
+    0%,100% { filter: brightness(1); }
+    50% { filter: brightness(1.6); }
+  }
+
+  /* column hover highlight overlay */
+  .col-hitbox {
+    position: absolute; top: 0; bottom: 0;
+    cursor: pointer;
+  }
+
+  /* ---------- Banner ---------- */
+  .banner {
+    position: absolute; top: 14px; left: 50%; transform: translate(-50%, -140%);
+    background: var(--bg-2); border: 1px solid var(--warn);
+    color: var(--warn);
+    padding: 10px 18px; border-radius: 4px;
+    letter-spacing: 2px; font-weight: 700; font-size: 13px;
+    text-shadow: 0 0 8px rgba(255,204,0,.5);
+    box-shadow: 0 0 24px rgba(255,204,0,.35);
+    transition: transform .4s ease, opacity .4s ease;
+    opacity: 0;
+    pointer-events: none;
+    white-space: nowrap;
+    z-index: 5;
+  }
+  .banner.show { transform: translate(-50%, 0); opacity: 1; }
+
+  .blind-overlay {
+    position: absolute; inset: 14px;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(0,0,0,.2);
+    color: var(--warn); font-size: 42px; font-weight: 800;
+    letter-spacing: 4px;
+    border-radius: 8px;
+    pointer-events: none;
+    z-index: 4;
+  }
+
+  /* ---------- Side panel ---------- */
+  .side {
+    display: flex; flex-direction: column; gap: 14px;
+  }
+  .card {
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: 6px; padding: 14px;
+  }
+  .card h3 {
+    margin: 0 0 8px; font-size: 12px; letter-spacing: 2px; color: var(--muted);
+    text-transform: uppercase;
+  }
+
+  .talk {
+    min-height: 110px;
+    font-size: 13px; line-height: 1.6; color: #ddd;
+    border-left: 2px solid var(--ai); padding-left: 10px;
+  }
+  .talk .label { color: var(--ai); font-weight: 700; letter-spacing: 1px; }
+
+  .chaos-log {
+    font-size: 12px; color: var(--muted); max-height: 160px; overflow-y: auto;
+  }
+  .chaos-log .entry { padding: 4px 0; border-bottom: 1px dashed var(--line); }
+  .chaos-log .entry:last-child { border-bottom: none; }
+  .chaos-log .entry b { color: var(--warn); }
+
+  /* ---------- End Overlay ---------- */
+  .end {
+    position: fixed; inset: 0; background: rgba(0,0,0,.75);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 20; backdrop-filter: blur(4px);
+  }
+  .end .box {
+    background: var(--panel); border: 1px solid var(--line);
+    padding: 32px 40px; border-radius: 8px; text-align: center; min-width: 320px;
+  }
+  .end h2 { margin: 0 0 12px; letter-spacing: 3px; }
+  .end.win h2 { color: var(--neon); text-shadow: 0 0 12px rgba(57,255,20,.5); }
+  .end.lose h2 { color: var(--ai); text-shadow: 0 0 12px rgba(255,59,127,.5); }
+  .end.draw h2 { color: var(--warn); }
+  .end p { color: var(--muted); margin: 0 0 20px; }
+  .end .cta { margin-top: 0; }
+
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="brand"><span class="dot"></span>CHAOS CONNECT 4 // INNOVATION FRIDAY</div>
+    <div class="header-right">
+      <button class="icon-btn" id="sound-btn">🔊 SOUND</button>
+      <button class="icon-btn hidden" id="home-btn">◀ MENU</button>
+    </div>
+  </header>
+
+  <!-- Start Screen -->
+  <section class="screen" id="start-screen">
+    <div class="pill">• GAMERS &amp; BUILDERS</div>
+    <h1 class="title">
+      <span class="human">HUMAN</span>
+      <span class="vs">VS.</span>
+      <span class="ai">AI</span>
+    </h1>
+    <div class="tag">Standard Connect 4 — with a twist. Every few turns, <b style="color:var(--warn)">CHAOS</b> strikes: gravity flips, columns shuffle, the board goes dark. Can you out-think the machine when the rules keep changing?</div>
+    <button class="cta" id="start-btn">START GAME</button>
+
+    <div class="rules">
+      <div class="rule"><b>GRAVITY FLIP</b><p>Pieces fall upward for the next turn.</p></div>
+      <div class="rule"><b>COLUMN SHUFFLE</b><p>All 7 columns are randomly reordered.</p></div>
+      <div class="rule"><b>BLIND MOVE</b><p>Board hides for 2 seconds before your move.</p></div>
+      <div class="rule"><b>DOUBLE DROP</b><p>Current player drops two pieces this turn.</p></div>
+      <div class="rule"><b>ROW CLEAR</b><p>The bottom row is wiped. Everything settles.</p></div>
+    </div>
+  </section>
+
+  <!-- Game Screen -->
+  <section class="game hidden" id="game-screen">
+    <div class="topbar">
+      <div class="turn human" id="turn-ind">
+        TURN: <span class="who" id="turn-who">HUMAN</span>
+      </div>
+      <div class="score">
+        <span class="s-h">YOU <b id="score-h">0</b></span>
+        <span class="s-a">AI <b id="score-a">0</b></span>
+        <button class="s-reset" id="score-reset">reset</button>
+      </div>
+    </div>
+
+    <div class="board-wrap">
+      <div class="banner" id="banner">CHAOS!</div>
+      <div class="board" id="board"></div>
+      <div class="blind-overlay hidden" id="blind">BLINDFOLDED</div>
+    </div>
+
+    <aside class="side">
+      <div class="card">
+        <h3>AI Trash Talk</h3>
+        <div class="talk" id="talk"><span class="label">AI:</span> <span id="talk-msg">Ready when you are, meatbag.</span></div>
+      </div>
+      <div class="card">
+        <h3>Chaos Log</h3>
+        <div class="chaos-log" id="chaos-log"><div class="entry" style="color:var(--muted)">No chaos yet. Turn 0.</div></div>
+      </div>
+    </aside>
+  </section>
+
+  <!-- End Overlay -->
+  <div class="end hidden" id="end">
+    <div class="box">
+      <h2 id="end-title">YOU WIN</h2>
+      <p id="end-msg">Lucky run. Rematch?</p>
+      <button class="cta" id="restart-btn">PLAY AGAIN</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ===========================================================
+   CHAOS CONNECT 4 — Human vs AI
+   Single-file implementation. See sections:
+   1) Constants & State
+   2) Board Logic
+   3) Rendering
+   4) AI Logic
+   5) Chaos Engine
+   6) Trash Talk
+   7) Sound
+   8) Flow / Events
+   =========================================================== */
+
+/* -------- 1) Constants & State -------- */
+const COLS = 7, ROWS = 6;
+const HUMAN = 1, AI = 2;
+const CHAOS_EVERY = 3; // every N completed turns
+
+const state = {
+  board: null,              // 2D array [row][col], 0/1/2
+  current: HUMAN,           // whose turn
+  gravityDown: true,        // false = next drop goes upward
+  gravityFlipOnce: false,   // flag: flipped for this single upcoming turn
+  turnCount: 0,             // turns completed
+  running: false,
+  doubleDropLeft: 0,        // when >0, current player drops again without switching
+  blinding: false,
+  winLine: null,
+  score: { h: 0, a: 0 },
+  soundOn: true,
+};
+
+/* -------- 2) Board Logic -------- */
+function createBoard() {
+  return Array.from({ length: ROWS }, () => Array(COLS).fill(0));
+}
+
+function validColumns(board) {
+  const cols = [];
+  for (let c = 0; c < COLS; c++) {
+    if (board[0][c] === 0 || board[ROWS - 1][c] === 0) cols.push(c);
+  }
+  return cols;
+}
+
+// Drop a piece in column c for player p with given gravity direction.
+// Returns {row, col} of placed piece, or null if illegal.
+function dropPiece(board, c, p, gravityDown = true) {
+  if (c < 0 || c >= COLS) return null;
+  if (gravityDown) {
+    for (let r = ROWS - 1; r >= 0; r--) {
+      if (board[r][c] === 0) { board[r][c] = p; return { row: r, col: c }; }
+    }
+  } else {
+    for (let r = 0; r < ROWS; r++) {
+      if (board[r][c] === 0) { board[r][c] = p; return { row: r, col: c }; }
+    }
+  }
+  return null;
+}
+
+// Returns winning line as array of [r,c] if 4-in-a-row, else null.
+function checkWin(board, p) {
+  const dirs = [[0,1],[1,0],[1,1],[1,-1]];
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      if (board[r][c] !== p) continue;
+      for (const [dr, dc] of dirs) {
+        const line = [];
+        for (let k = 0; k < 4; k++) {
+          const rr = r + dr*k, cc = c + dc*k;
+          if (rr<0||rr>=ROWS||cc<0||cc>=COLS) break;
+          if (board[rr][cc] !== p) break;
+          line.push([rr, cc]);
+        }
+        if (line.length === 4) return line;
+      }
+    }
+  }
+  return null;
+}
+
+function isDraw(board) {
+  return board.every(row => row.every(v => v !== 0));
+}
+
+function cloneBoard(b) { return b.map(r => r.slice()); }
+
+/* -------- 3) Rendering -------- */
+const boardEl = document.getElementById('board');
+const bannerEl = document.getElementById('banner');
+const blindEl = document.getElementById('blind');
+const turnIndEl = document.getElementById('turn-ind');
+const turnWhoEl = document.getElementById('turn-who');
+const scoreHEl = document.getElementById('score-h');
+const scoreAEl = document.getElementById('score-a');
+
+function renderBoard() {
+  boardEl.innerHTML = '';
+  // cells
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      const cell = document.createElement('div');
+      cell.className = 'cell';
+      cell.dataset.r = r; cell.dataset.c = c;
+      const v = state.board[r][c];
+      if (v !== 0) {
+        const piece = document.createElement('div');
+        piece.className = 'piece ' + (v === HUMAN ? 'human' : 'ai');
+        if (state.winLine && state.winLine.some(([wr,wc]) => wr===r && wc===c)) {
+          piece.classList.add('win');
+        }
+        cell.appendChild(piece);
+      }
+      boardEl.appendChild(cell);
+    }
+  }
+  // column hitboxes for hover + click
+  // Use single overlay event delegation on the board.
+  boardEl.style.setProperty('--cols', COLS);
+  boardEl.style.setProperty('--rows', ROWS);
+
+  // flipped class reflects the *current* gravity for the next drop
+  boardEl.classList.toggle('flipped', !state.gravityDown);
+}
+
+function animateDrop(row, col, player) {
+  // Rerender then add pop animation to the freshly placed piece
+  renderBoard();
+  const idx = row * COLS + col;
+  const cell = boardEl.children[idx];
+  if (!cell) return;
+  const piece = cell.querySelector('.piece');
+  if (!piece) return;
+  // Slide from top (or bottom if gravity flipped)
+  const from = state.gravityDown ? -((row+1) * 100) : ((ROWS - row) * 100);
+  piece.style.transform = `translateY(${from}%)`;
+  requestAnimationFrame(() => {
+    piece.style.transform = 'translateY(0)';
+  });
+}
+
+function setTurnIndicator() {
+  turnIndEl.classList.toggle('human', state.current === HUMAN);
+  turnIndEl.classList.toggle('ai', state.current === AI);
+  turnWhoEl.textContent = state.current === HUMAN ? 'HUMAN' : 'AI';
+}
+
+function showBanner(text, ms = 2200) {
+  bannerEl.textContent = '⚡ ' + text + ' ⚡';
+  bannerEl.classList.add('show');
+  beep(880, 0.12); beep(1240, 0.12, 120);
+  clearTimeout(bannerEl._t);
+  bannerEl._t = setTimeout(() => bannerEl.classList.remove('show'), ms);
+}
+
+function logChaos(name) {
+  const log = document.getElementById('chaos-log');
+  // Clear placeholder
+  if (log.children.length === 1 && log.children[0].textContent.startsWith('No chaos')) {
+    log.innerHTML = '';
+  }
+  const entry = document.createElement('div');
+  entry.className = 'entry';
+  entry.innerHTML = `Turn ${state.turnCount}: <b>${name}</b>`;
+  log.prepend(entry);
+}
+
+function updateScore() {
+  scoreHEl.textContent = state.score.h;
+  scoreAEl.textContent = state.score.a;
+  localStorage.setItem('cc4-score', JSON.stringify(state.score));
+}
+
+/* -------- 4) AI Logic -------- */
+// Simulate a drop on a clone, return {row, col} or null
+function simulateDrop(board, c, p, gravityDown) {
+  const b = cloneBoard(board);
+  const pos = dropPiece(b, c, p, gravityDown);
+  return pos ? { b, pos } : null;
+}
+
+// Score a position for player p (higher = better for p)
+function scorePosition(board, p) {
+  const opp = p === AI ? HUMAN : AI;
+  let score = 0;
+
+  // Center column preference
+  const centerCol = Math.floor(COLS / 2);
+  let centerCount = 0;
+  for (let r = 0; r < ROWS; r++) if (board[r][centerCol] === p) centerCount++;
+  score += centerCount * 3;
+
+  // Evaluate all 4-windows
+  const windows = [];
+  for (let r = 0; r < ROWS; r++)
+    for (let c = 0; c <= COLS - 4; c++)
+      windows.push([0,1,2,3].map(k => board[r][c+k]));
+  for (let c = 0; c < COLS; c++)
+    for (let r = 0; r <= ROWS - 4; r++)
+      windows.push([0,1,2,3].map(k => board[r+k][c]));
+  for (let r = 0; r <= ROWS - 4; r++)
+    for (let c = 0; c <= COLS - 4; c++)
+      windows.push([0,1,2,3].map(k => board[r+k][c+k]));
+  for (let r = 3; r < ROWS; r++)
+    for (let c = 0; c <= COLS - 4; c++)
+      windows.push([0,1,2,3].map(k => board[r-k][c+k]));
+
+  for (const w of windows) {
+    const pc = w.filter(v => v === p).length;
+    const oc = w.filter(v => v === opp).length;
+    const ec = w.filter(v => v === 0).length;
+    if (pc === 4) score += 1000;
+    else if (pc === 3 && ec === 1) score += 10;
+    else if (pc === 2 && ec === 2) score += 3;
+    if (oc === 3 && ec === 1) score -= 12; // threat penalty
+    if (oc === 4) score -= 1000;
+  }
+  return score;
+}
+
+function aiChooseMove() {
+  const board = state.board;
+  const gravityDown = state.gravityDown;
+  const legal = validColumns(board);
+  if (!legal.length) return null;
+
+  // 1) Immediate winning move
+  for (const c of legal) {
+    const sim = simulateDrop(board, c, AI, gravityDown);
+    if (sim && checkWin(sim.b, AI)) return c;
+  }
+  // 2) Block immediate human win
+  for (const c of legal) {
+    const sim = simulateDrop(board, c, HUMAN, gravityDown);
+    if (sim && checkWin(sim.b, HUMAN)) return c;
+  }
+  // 3) Heuristic score — and avoid setting up a human win next turn
+  let bestScore = -Infinity, best = [];
+  for (const c of legal) {
+    const sim = simulateDrop(board, c, AI, gravityDown);
+    if (!sim) continue;
+    let s = scorePosition(sim.b, AI);
+    // penalize moves that let human win immediately after
+    for (const c2 of validColumns(sim.b)) {
+      const sim2 = simulateDrop(sim.b, c2, HUMAN, gravityDown);
+      if (sim2 && checkWin(sim2.b, HUMAN)) { s -= 500; break; }
+    }
+    if (s > bestScore) { bestScore = s; best = [c]; }
+    else if (s === bestScore) best.push(c);
+  }
+  return best[Math.floor(Math.random() * best.length)];
+}
+
+/* -------- 5) Chaos Engine -------- */
+const CHAOS_EVENTS = [
+  {
+    id: 'gravity-flip',
+    label: 'GRAVITY FLIP',
+    apply: () => {
+      state.gravityDown = !state.gravityDown;
+      state.gravityFlipOnce = true;
+      renderBoard();
+    }
+  },
+  {
+    id: 'column-shuffle',
+    label: 'COLUMN SHUFFLE',
+    apply: () => {
+      const order = [...Array(COLS).keys()];
+      // Fisher-Yates
+      for (let i = order.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [order[i], order[j]] = [order[j], order[i]];
+      }
+      const newBoard = createBoard();
+      for (let c = 0; c < COLS; c++) {
+        const src = order[c];
+        for (let r = 0; r < ROWS; r++) newBoard[r][c] = state.board[r][src];
+      }
+      state.board = newBoard;
+      renderBoard();
+    }
+  },
+  {
+    id: 'blind-move',
+    label: 'BLIND MOVE',
+    // only meaningful before a HUMAN move
+    apply: () => {
+      if (state.current !== HUMAN) return; // no effect for AI turn
+      state.blinding = true;
+      boardEl.classList.add('blind');
+      blindEl.classList.remove('hidden');
+      setTimeout(() => {
+        state.blinding = false;
+        boardEl.classList.remove('blind');
+        blindEl.classList.add('hidden');
+      }, 2000);
+    }
+  },
+  {
+    id: 'double-drop',
+    label: 'DOUBLE DROP',
+    apply: () => {
+      state.doubleDropLeft = 1; // after current drop, drop once more before switching
+    }
+  },
+  {
+    id: 'row-clear',
+    label: 'ROW CLEAR',
+    apply: () => {
+      const b = state.board;
+      if (state.gravityDown) {
+        // Clear bottom row, let everything fall by one
+        for (let r = ROWS - 1; r > 0; r--) {
+          for (let c = 0; c < COLS; c++) b[r][c] = b[r-1][c];
+        }
+        for (let c = 0; c < COLS; c++) b[0][c] = 0;
+      } else {
+        for (let r = 0; r < ROWS - 1; r++) {
+          for (let c = 0; c < COLS; c++) b[r][c] = b[r+1][c];
+        }
+        for (let c = 0; c < COLS; c++) b[ROWS-1][c] = 0;
+      }
+      renderBoard();
+    }
+  }
+];
+
+function maybeTriggerChaos() {
+  if (state.turnCount > 0 && state.turnCount % CHAOS_EVERY === 0) {
+    // 70% chance so it feels organic but predictable "every 3 turns ish"
+    if (Math.random() < 0.85) {
+      const ev = CHAOS_EVENTS[Math.floor(Math.random() * CHAOS_EVENTS.length)];
+      ev.apply();
+      showBanner('CHAOS: ' + ev.label);
+      logChaos(ev.label);
+      setTalk(pick(TRASH.chaos));
+    }
+  }
+}
+
+/* -------- 6) Trash Talk -------- */
+const TRASH = {
+  start: [
+    "Ready when you are, meatbag.",
+    "I've calculated 4,194,304 ways to beat you. Pick one.",
+    "Try not to lose in under a minute."
+  ],
+  neutral: [
+    "Interesting choice. Interesting in a bad way.",
+    "Is that... a strategy? Bold.",
+    "Still loading your brain? Take your time.",
+    "Mid. Purely mid."
+  ],
+  winning: [
+    "It's cute that you're still trying.",
+    "I could win blindfolded. Oh wait.",
+    "This is embarrassing — for you.",
+    "GG already. Just resign."
+  ],
+  losing: [
+    "That... was not in my training data.",
+    "Lucky move. Lucky LUCKY move.",
+    "Recalculating. Recalculating. RECALCULATING.",
+    "Hey, are you cheating? Be honest."
+  ],
+  chaos: [
+    "Oh great. Chaos. My favorite.",
+    "Let's see how you handle this.",
+    "Rules are a social construct anyway.",
+    "Hope you didn't have a plan!"
+  ],
+  humanWin: [
+    "...how.",
+    "I'll be back. After a firmware update.",
+    "This simulation is broken."
+  ],
+  aiWin: [
+    "Was there ever any doubt?",
+    "Skill issue. Human skill issue.",
+    "Shall we play again? I'll use 1% this time."
+  ],
+  draw: [
+    "A draw? Unsatisfying for us both."
+  ]
+};
+
+function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+
+function setTalk(msg) {
+  document.getElementById('talk-msg').textContent = msg;
+}
+
+// classify state and return appropriate trash-talk category
+function classifyAndTalk() {
+  const myScore = scorePosition(state.board, AI);
+  const theirScore = scorePosition(state.board, HUMAN);
+  const diff = myScore - theirScore;
+  if (diff > 15) setTalk(pick(TRASH.winning));
+  else if (diff < -15) setTalk(pick(TRASH.losing));
+  else setTalk(pick(TRASH.neutral));
+}
+
+/* -------- 7) Sound (WebAudio) -------- */
+let audioCtx = null;
+function ensureAudio() {
+  if (!audioCtx) {
+    try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
+    catch(e) { audioCtx = null; }
+  }
+}
+function beep(freq = 440, dur = 0.1, delay = 0, type = 'square', vol = 0.05) {
+  if (!state.soundOn) return;
+  ensureAudio();
+  if (!audioCtx) return;
+  const t0 = audioCtx.currentTime + delay/1000;
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.type = type; osc.frequency.setValueAtTime(freq, t0);
+  gain.gain.setValueAtTime(vol, t0);
+  gain.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+  osc.connect(gain).connect(audioCtx.destination);
+  osc.start(t0); osc.stop(t0 + dur + 0.02);
+}
+function soundDrop() { beep(220, 0.08, 0, 'triangle', 0.08); }
+function soundWin() { beep(660, 0.15); beep(880, 0.15, 150); beep(1320, 0.25, 300); }
+function soundLose() { beep(220, 0.2); beep(160, 0.3, 200); }
+
+/* -------- 8) Flow & Events -------- */
+const startScreen = document.getElementById('start-screen');
+const gameScreen = document.getElementById('game-screen');
+const endEl = document.getElementById('end');
+const homeBtn = document.getElementById('home-btn');
+
+function startGame() {
+  state.board = createBoard();
+  state.current = Math.random() < 0.5 ? HUMAN : AI;
+  state.gravityDown = true;
+  state.gravityFlipOnce = false;
+  state.turnCount = 0;
+  state.doubleDropLeft = 0;
+  state.winLine = null;
+  state.running = true;
+
+  startScreen.classList.add('hidden');
+  gameScreen.classList.remove('hidden');
+  endEl.classList.add('hidden');
+  homeBtn.classList.remove('hidden');
+  document.getElementById('chaos-log').innerHTML =
+    '<div class="entry" style="color:var(--muted)">No chaos yet. Turn 0.</div>';
+
+  setTalk(pick(TRASH.start));
+  renderBoard();
+  setTurnIndicator();
+  if (state.current === AI) setTimeout(doAiTurn, 600);
+}
+
+function goHome() {
+  state.running = false;
+  gameScreen.classList.add('hidden');
+  endEl.classList.add('hidden');
+  homeBtn.classList.add('hidden');
+  startScreen.classList.remove('hidden');
+}
+
+// Handle end of a player's move: check win/draw, count turn, trigger chaos, switch.
+function afterMove(player, placed) {
+  // Win?
+  const line = checkWin(state.board, player);
+  if (line) {
+    state.winLine = line;
+    renderBoard();
+    endGame(player);
+    return;
+  }
+  if (isDraw(state.board)) { endGame(0); return; }
+
+  // Double drop: same player goes again, NO chaos/turn-count between
+  if (state.doubleDropLeft > 0) {
+    state.doubleDropLeft--;
+    showBanner('DROP AGAIN!');
+    if (state.current === AI) setTimeout(doAiTurn, 500);
+    return;
+  }
+
+  state.turnCount++;
+
+  // One-time gravity flip expires AFTER this completed turn pair action.
+  // Per spec: "pieces fall upward instead of downward for the NEXT turn."
+  // We've already used the flipped gravity for this turn; revert now.
+  if (state.gravityFlipOnce) {
+    state.gravityFlipOnce = false;
+    state.gravityDown = true;
+    renderBoard();
+  }
+
+  // Switch player
+  state.current = (player === HUMAN) ? AI : HUMAN;
+  setTurnIndicator();
+
+  // Chaos check BEFORE next move
+  maybeTriggerChaos();
+
+  // Post-chaos: if board already has a winner (row-clear / shuffle edge), check
+  const autoLine = checkWin(state.board, HUMAN) || checkWin(state.board, AI);
+  if (autoLine) {
+    state.winLine = autoLine;
+    renderBoard();
+    // determine which color
+    const [r,c] = autoLine[0];
+    endGame(state.board[r][c]);
+    return;
+  }
+  if (isDraw(state.board)) { endGame(0); return; }
+
+  // AI turn?
+  if (state.current === AI) {
+    // Brief think delay so animations land
+    const delay = 350 + Math.random() * 150;
+    setTimeout(doAiTurn, delay);
+  } else {
+    classifyAndTalk();
+  }
+}
+
+function doAiTurn() {
+  if (!state.running) return;
+  const c = aiChooseMove();
+  if (c == null) { endGame(0); return; }
+  const pos = dropPiece(state.board, c, AI, state.gravityDown);
+  if (!pos) return;
+  soundDrop();
+  animateDrop(pos.row, pos.col, AI);
+  classifyAndTalk();
+  afterMove(AI, pos);
+}
+
+function handleHumanClick(col) {
+  if (!state.running || state.current !== HUMAN || state.blinding) return;
+  const legal = validColumns(state.board);
+  if (!legal.includes(col)) return;
+  const pos = dropPiece(state.board, col, HUMAN, state.gravityDown);
+  if (!pos) return;
+  soundDrop();
+  animateDrop(pos.row, pos.col, HUMAN);
+  afterMove(HUMAN, pos);
+}
+
+function endGame(winner) {
+  state.running = false;
+  renderBoard();
+  endEl.classList.remove('hidden');
+  const title = document.getElementById('end-title');
+  const msg = document.getElementById('end-msg');
+  endEl.classList.remove('win','lose','draw');
+  if (winner === HUMAN) {
+    endEl.classList.add('win');
+    title.textContent = 'YOU WIN';
+    msg.textContent = pick(TRASH.humanWin);
+    state.score.h++;
+    soundWin();
+  } else if (winner === AI) {
+    endEl.classList.add('lose');
+    title.textContent = 'AI WINS';
+    msg.textContent = pick(TRASH.aiWin);
+    state.score.a++;
+    soundLose();
+  } else {
+    endEl.classList.add('draw');
+    title.textContent = 'DRAW';
+    msg.textContent = pick(TRASH.draw);
+  }
+  updateScore();
+}
+
+/* Board hover + click (delegated) */
+boardEl.addEventListener('mousemove', (e) => {
+  if (!state.running || state.current !== HUMAN) return;
+  const rect = boardEl.getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  const col = Math.floor((x / rect.width) * COLS);
+  [...boardEl.children].forEach(cell => cell.classList.toggle('hover',
+    Number(cell.dataset.c) === col));
+});
+boardEl.addEventListener('mouseleave', () => {
+  [...boardEl.children].forEach(cell => cell.classList.remove('hover'));
+});
+boardEl.addEventListener('click', (e) => {
+  if (!state.running || state.current !== HUMAN) return;
+  const rect = boardEl.getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  const col = Math.max(0, Math.min(COLS - 1, Math.floor((x / rect.width) * COLS)));
+  handleHumanClick(col);
+});
+
+/* UI wiring */
+document.getElementById('start-btn').addEventListener('click', startGame);
+document.getElementById('restart-btn').addEventListener('click', startGame);
+homeBtn.addEventListener('click', goHome);
+document.getElementById('score-reset').addEventListener('click', () => {
+  state.score = { h: 0, a: 0 };
+  updateScore();
+});
+document.getElementById('sound-btn').addEventListener('click', (e) => {
+  state.soundOn = !state.soundOn;
+  e.currentTarget.textContent = state.soundOn ? '🔊 SOUND' : '🔇 MUTED';
+});
+
+/* Load persisted score */
+try {
+  const s = JSON.parse(localStorage.getItem('cc4-score'));
+  if (s && typeof s.h === 'number') state.score = s;
+} catch(e) {}
+updateScore();
+
+</script>
+</body>
+</html>
