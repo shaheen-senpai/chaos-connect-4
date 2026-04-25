@@ -280,6 +280,7 @@
 				border: 1px solid var(--line);
 				border-radius: 8px;
 				padding: 14px;
+				perspective: 1600px;
 			}
 
 			.board {
@@ -294,16 +295,20 @@
 				border-radius: 8px;
 				padding: 10px;
 				position: relative;
-				transition: transform 0.5s ease;
+				transform-style: preserve-3d;
+				transition: transform 0.7s ease-in-out;
 			}
 			.board.flipped {
-				transform: scaleY(-1);
+				transform: rotateX(180deg);
 			}
-			.board.flipped .cell .piece {
-				transform: scaleY(-1);
-			} /* keep pieces upright visually */
-			.board.blind {
-				filter: blur(18px) brightness(0.4);
+			/* Blind mode: hide player identity by greying out every chip. */
+			.board.blind .piece.human,
+			.board.blind .piece.ai {
+				background: radial-gradient(circle at 30% 30%, #8a8a8a, #555 55%, #2d2d2d) !important;
+				box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.35) !important;
+				transition:
+					background 0.3s ease,
+					box-shadow 0.3s ease;
 			}
 
 			.cell {
@@ -572,6 +577,10 @@
 						<div class="talk" id="talk"><span class="label">AI:</span> <span id="talk-msg">Ready when you are, meatbag.</span></div>
 					</div>
 					<div class="card">
+						<h3>Next Chaos</h3>
+						<div id="next-chaos" style="font-size: 13px; letter-spacing: 1px"><span style="color: var(--muted)">—</span></div>
+					</div>
+					<div class="card">
 						<h3>Chaos Log</h3>
 						<div class="chaos-log" id="chaos-log"><div class="entry" style="color: var(--muted)">No chaos yet. Turn 0.</div></div>
 					</div>
@@ -612,15 +621,17 @@
 			const state = {
 				board: null, // 2D array [row][col], 0/1/2
 				current: HUMAN, // whose turn
-				gravityDown: true, // false = next drop goes upward
-				gravityFlipOnce: false, // flag: flipped for this single upcoming turn
+				gravityDown: true, // false = chips settle at the top; permanent once flipped
 				turnCount: 0, // turns completed
 				running: false,
 				doubleDropLeft: 0, // when >0, current player drops again without switching
 				blinding: false,
+				animating: false, // true while a chaos animation is running
 				winLine: null,
 				score: { h: 0, a: 0 },
 				soundOn: true,
+				nextChaosEvent: null, // queued CHAOS_EVENTS entry
+				turnsUntilChaos: 0, // completed turns remaining before queued event fires
 			};
 
 			/* -------- 2) Board Logic -------- */
@@ -728,7 +739,7 @@
 				boardEl.style.setProperty("--cols", COLS);
 				boardEl.style.setProperty("--rows", ROWS);
 
-				// flipped class reflects the *current* gravity for the next drop
+				// Keep the board rotated while gravity is inverted.
 				boardEl.classList.toggle("flipped", !state.gravityDown);
 			}
 
@@ -865,9 +876,7 @@
 					id: "gravity-flip",
 					label: "GRAVITY FLIP",
 					apply: () => {
-						state.gravityDown = !state.gravityDown;
-						state.gravityFlipOnce = true;
-						renderBoard();
+						animateGravityFlip();
 					},
 				},
 				{
@@ -892,13 +901,11 @@
 				{
 					id: "blind-move",
 					label: "BLIND MOVE",
-					// only meaningful before a HUMAN move
 					apply: () => {
-						if (state.current !== HUMAN) return; // no effect for AI turn
 						state.blinding = true;
 						boardEl.classList.add("blind");
 						blindEl.classList.remove("hidden");
-						// Blind stays until the player drops a chip (cleared in handleHumanClick).
+						// Blind stays until a human chip is dropped (cleared in handleHumanClick).
 					},
 				},
 				{
@@ -930,17 +937,112 @@
 				},
 			];
 
-			function maybeTriggerChaos() {
-				if (state.turnCount > 0 && state.turnCount % CHAOS_EVERY === 0) {
-					// 70% chance so it feels organic but predictable "every 3 turns ish"
-					if (Math.random() < 0.85) {
-						const ev = CHAOS_EVENTS[Math.floor(Math.random() * CHAOS_EVENTS.length)];
-						ev.apply();
-						showBanner("CHAOS: " + ev.label);
-						logChaos(ev.label);
-						setTalk(pick(TRASH.chaos));
+			// Gravity flip:
+			//   Phase 1 — the whole board rotates 180° around the X axis (CSS transition).
+			//             The chips ride along with it; after this phase they are visually
+			//             hanging from the (new) top.
+			//   Phase 2 — chips fall under gravity to their new resting positions on the
+			//             (new) bottom, where they stack in reversed order.
+			// Future drops arrive from the new top (state.gravityDown is toggled).
+			const GRAVITY_FLIP_SPIN_MS = 800;
+			const GRAVITY_FLIP_FALL_MS = 950;
+			const GRAVITY_FLIP_MS = GRAVITY_FLIP_SPIN_MS + GRAVITY_FLIP_FALL_MS;
+
+			function animateGravityFlip() {
+				const oldBoard = state.board;
+				const newBoard = createBoard();
+				const wasGravityDown = state.gravityDown;
+				const chipInfos = []; // { col, fromRow, toRow }
+
+				for (let c = 0; c < COLS; c++) {
+					// Collect chips top-down so chips[0] is the topmost chip of the pile
+					// (the one that was CLOSEST to the new-bottom after rotation — it
+					// lands first and sits at the deepest new-bottom row).
+					const chips = [];
+					for (let r = 0; r < ROWS; r++) {
+						if (oldBoard[r][c]) chips.push({ fromRow: r, player: oldBoard[r][c] });
 					}
+					const N = chips.length;
+					chips.forEach((chip, i) => {
+						// After the flip, chips pile against the NEW gravity side.
+						// wasGravityDown=true → new gravity is up → pile at rows 0..N-1.
+						// wasGravityDown=false → new gravity is down → pile at rows ROWS-N..ROWS-1.
+						const toRow = wasGravityDown ? i : ROWS - N + i;
+						newBoard[toRow][c] = chip.player;
+						chipInfos.push({ col: c, fromRow: chip.fromRow, toRow });
+					});
 				}
+
+				state.animating = true;
+
+				// Phase 1: rotate the board. The CSS transition on `.board` handles it.
+				// After the flip, `.flipped` should reflect the *new* gravity direction:
+				// if gravity was down (wasGravityDown=true), it is now up → board flipped.
+				boardEl.classList.toggle("flipped", wasGravityDown);
+
+				// Phase 2: after the rotation finishes, drop each chip to its new row.
+				// Because the board is now rotated 180°, a negative translateY in the
+				// chip's local coords visually moves it DOWN the screen — which is the
+				// direction we want (chips falling toward the new bottom).
+				setTimeout(() => {
+					for (const info of chipInfos) {
+						const oldCell = boardEl.children[info.fromRow * COLS + info.col];
+						const newCell = boardEl.children[info.toRow * COLS + info.col];
+						if (!oldCell || !newCell) continue;
+						const piece = oldCell.querySelector(".piece");
+						if (!piece) continue;
+						const dy = newCell.offsetTop - oldCell.offsetTop;
+						// Stagger slightly by fall distance so longer falls start a beat
+						// earlier — a touch more organic.
+						const delay = Math.max(0, 120 - Math.abs(dy) * 0.4);
+						piece.style.transition = `transform ${GRAVITY_FLIP_FALL_MS}ms cubic-bezier(0.33, 0, 0.67, 1)`;
+						setTimeout(() => {
+							piece.style.transform = `translateY(${dy}px)`;
+						}, delay);
+					}
+				}, GRAVITY_FLIP_SPIN_MS + 20);
+
+				// Commit the new state once everything settles. renderBoard() will keep
+				// `.flipped` applied via its toggle based on `!state.gravityDown`.
+				setTimeout(() => {
+					state.board = newBoard;
+					state.gravityDown = !wasGravityDown;
+					state.animating = false;
+					renderBoard();
+				}, GRAVITY_FLIP_MS + 150);
+			}
+
+			function pickNextChaosEvent() {
+				return CHAOS_EVENTS[Math.floor(Math.random() * CHAOS_EVENTS.length)];
+			}
+
+			function queueNextChaos() {
+				state.nextChaosEvent = pickNextChaosEvent();
+				state.turnsUntilChaos = CHAOS_EVERY;
+				renderNextChaos();
+			}
+
+			function renderNextChaos() {
+				const el = document.getElementById("next-chaos");
+				if (!el) return;
+				if (!state.nextChaosEvent || !state.running) {
+					el.innerHTML = '<span style="color:var(--muted)">—</span>';
+					return;
+				}
+				const n = state.turnsUntilChaos;
+				const when = n <= 0 ? "NOW" : n === 1 ? "next turn" : `in ${n} turns`;
+				el.innerHTML = `<span style="color:var(--muted)">${when}:</span> <b style="color:var(--warn)">${state.nextChaosEvent.label}</b>`;
+			}
+
+			function maybeTriggerChaos() {
+				if (state.turnsUntilChaos > 0) return false;
+				const ev = state.nextChaosEvent || pickNextChaosEvent();
+				ev.apply();
+				showBanner("CHAOS: " + ev.label);
+				logChaos(ev.label);
+				setTalk(pick(TRASH.chaos));
+				queueNextChaos();
+				return true;
 			}
 
 			/* -------- 6) Trash Talk -------- */
@@ -1042,11 +1144,15 @@
 				state.board = createBoard();
 				state.current = Math.random() < 0.5 ? HUMAN : AI;
 				state.gravityDown = true;
-				state.gravityFlipOnce = false;
 				state.turnCount = 0;
 				state.doubleDropLeft = 0;
 				state.winLine = null;
 				state.running = true;
+				state.blinding = false;
+				state.animating = false;
+				boardEl.classList.remove("blind");
+				blindEl.classList.add("hidden");
+				queueNextChaos();
 
 				startScreen.classList.add("hidden");
 				gameScreen.classList.remove("hidden");
@@ -1057,7 +1163,7 @@
 				setTalk(pick(TRASH.start));
 				renderBoard();
 				setTurnIndicator();
-				if (state.current === AI) setTimeout(doAiTurn, 600);
+				if (state.current === AI) setTimeout(doAiTurn, 1000);
 			}
 
 			function goHome() {
@@ -1087,27 +1193,20 @@
 				if (state.doubleDropLeft > 0) {
 					state.doubleDropLeft--;
 					showBanner("DROP AGAIN!");
-					if (state.current === AI) setTimeout(doAiTurn, 500);
+					if (state.current === AI) setTimeout(doAiTurn, 1000);
 					return;
 				}
 
 				state.turnCount++;
-
-				// One-time gravity flip expires AFTER this completed turn pair action.
-				// Per spec: "pieces fall upward instead of downward for the NEXT turn."
-				// We've already used the flipped gravity for this turn; revert now.
-				if (state.gravityFlipOnce) {
-					state.gravityFlipOnce = false;
-					state.gravityDown = true;
-					renderBoard();
-				}
+				if (state.turnsUntilChaos > 0) state.turnsUntilChaos--;
+				renderNextChaos();
 
 				// Switch player
 				state.current = player === HUMAN ? AI : HUMAN;
 				setTurnIndicator();
 
 				// Chaos check BEFORE next move
-				maybeTriggerChaos();
+				const chaosFired = maybeTriggerChaos();
 
 				// Post-chaos: if board already has a winner (row-clear / shuffle edge), check
 				const autoLine = checkWin(state.board, HUMAN) || checkWin(state.board, AI);
@@ -1126,8 +1225,11 @@
 
 				// AI turn?
 				if (state.current === AI) {
-					// Brief think delay so animations land
-					const delay = 350 + Math.random() * 150;
+					// Think delay so the player can see the previous move / chaos effect land.
+					// Longer pause after a chaos event so board changes are visible.
+					// If the chaos event animates the board (e.g. gravity flip), wait for it.
+					const chaosDelay = chaosFired ? (state.animating ? GRAVITY_FLIP_MS + 400 : 1600) : 900;
+					const delay = chaosDelay + Math.random() * 300;
 					setTimeout(doAiTurn, delay);
 				} else {
 					classifyAndTalk();
@@ -1143,6 +1245,13 @@
 				}
 				const pos = dropPiece(state.board, c, AI, state.gravityDown);
 				if (!pos) return;
+				// Blind move that was triggered before the AI's turn only "blinds" the AI,
+				// which sees nothing anyway. Clear it now so the human plays normally.
+				if (state.blinding) {
+					state.blinding = false;
+					boardEl.classList.remove("blind");
+					blindEl.classList.add("hidden");
+				}
 				soundDrop();
 				animateDrop(pos.row, pos.col, AI);
 				classifyAndTalk();
@@ -1150,7 +1259,7 @@
 			}
 
 			function handleHumanClick(col) {
-				if (!state.running || state.current !== HUMAN) return;
+				if (!state.running || state.current !== HUMAN || state.animating) return;
 				const legal = validColumns(state.board);
 				if (!legal.includes(col)) return;
 				const pos = dropPiece(state.board, col, HUMAN, state.gravityDown);
