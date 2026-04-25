@@ -183,7 +183,7 @@
 				grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
 				gap: 12px;
 				max-width: 760px;
-				margin-top: 18px;
+				width: 100%;
 			}
 			.rule {
 				border: 1px solid var(--line);
@@ -201,6 +201,155 @@
 				color: var(--muted);
 				font-size: 13px;
 				line-height: 1.5;
+			}
+
+			/* ---------- Chaos Config (start screen) ---------- */
+			.chaos-config {
+				width: 100%;
+				max-width: 760px;
+				display: flex;
+				flex-direction: column;
+				align-items: center;
+				gap: 10px;
+				margin-top: 14px;
+			}
+			.chaos-master {
+				display: inline-flex;
+				align-items: center;
+				gap: 12px;
+			}
+			.chaos-master-label {
+				color: var(--neon);
+				letter-spacing: 3px;
+				font-size: 13px;
+				font-weight: 700;
+			}
+			.toggle-btn {
+				border: 1px solid var(--neon);
+				background: transparent;
+				color: var(--neon);
+				font-family: inherit;
+				letter-spacing: 2px;
+				font-size: 12px;
+				padding: 5px 12px 5px 6px;
+				border-radius: 999px;
+				display: inline-flex;
+				align-items: center;
+				gap: 8px;
+				cursor: pointer;
+			}
+			.toggle-btn .toggle-track {
+				width: 28px;
+				height: 14px;
+				background: rgba(57, 255, 20, 0.18);
+				border-radius: 999px;
+				position: relative;
+				transition: background 0.2s ease;
+			}
+			.toggle-btn .toggle-thumb {
+				position: absolute;
+				top: 1px;
+				left: 1px;
+				width: 12px;
+				height: 12px;
+				border-radius: 50%;
+				background: var(--neon);
+				transition:
+					transform 0.2s ease,
+					background 0.2s ease;
+			}
+			.toggle-btn.on .toggle-thumb {
+				transform: translateX(14px);
+			}
+			.toggle-btn.off {
+				color: var(--muted);
+				border-color: var(--line);
+			}
+			.toggle-btn.off .toggle-track {
+				background: rgba(160, 160, 160, 0.18);
+			}
+			.toggle-btn.off .toggle-thumb {
+				background: var(--muted);
+				transform: translateX(0);
+			}
+			.chaos-config-hint {
+				color: var(--muted);
+				font-size: 12px;
+				letter-spacing: 1px;
+			}
+			.chaos-card {
+				color: inherit;
+				font-family: inherit;
+				cursor: pointer;
+				width: 100%;
+				transition:
+					transform 0.1s ease,
+					opacity 0.2s ease,
+					border-color 0.2s ease,
+					background 0.2s ease;
+			}
+			.chaos-card:hover:not(.disabled) {
+				border-color: var(--neon);
+			}
+			.chaos-card:active {
+				transform: scale(0.98);
+			}
+			.chaos-card.disabled {
+				opacity: 0.35;
+				border-color: var(--line);
+				background: rgba(255, 255, 255, 0.01);
+			}
+			.chaos-card.disabled b {
+				color: var(--muted);
+			}
+			.chaos-config.master-off .chaos-config-hint,
+			.chaos-config.master-off .rules {
+				opacity: 0.4;
+				pointer-events: none;
+			}
+
+			/* ---------- Mobile (start screen + header) ---------- */
+			@media (max-width: 600px) {
+				.wrap {
+					padding: 14px;
+				}
+				header {
+					margin-bottom: 14px;
+					padding-bottom: 12px;
+				}
+				.brand {
+					font-size: 12px;
+					letter-spacing: 1px;
+				}
+				.brand .brand-tail {
+					display: none;
+				}
+				.icon-btn {
+					font-size: 11px;
+					padding: 5px 8px;
+				}
+				.screen {
+					min-height: auto;
+					gap: 14px;
+					padding: 8px 0 24px;
+				}
+				h1.title {
+					letter-spacing: 2px;
+				}
+				h1.title .vs {
+					letter-spacing: 4px;
+					margin: 6px 0;
+				}
+				.tag {
+					font-size: 14px;
+				}
+				.cta {
+					padding: 12px 28px;
+				}
+				.rules {
+					grid-template-columns: 1fr;
+					max-width: 420px;
+				}
 			}
 
 			/* ---------- Game Layout ---------- */
@@ -509,7 +658,7 @@
 	<body>
 		<div class="wrap">
 			<header>
-				<div class="brand"><span class="dot"></span>CHAOS CONNECT 4 // INNOVATION FRIDAY</div>
+				<div class="brand"><span class="dot"></span>CHAOS CONNECT 4<span class="brand-tail"></span> // INNOVATION FRIDAY</span></div>
 				<div class="header-right">
 					<button class="icon-btn" id="sound-btn">🔊 SOUND</button>
 					<button class="icon-btn hidden" id="home-btn">◀ MENU</button>
@@ -530,26 +679,36 @@
 				</div>
 				<button class="cta" id="start-btn">START GAME</button>
 
-				<div class="rules">
-					<div class="rule">
-						<b>GRAVITY FLIP</b>
-						<p>Pieces fall upward for the next turn.</p>
+				<div class="chaos-config" id="chaos-config">
+					<div class="chaos-master">
+						<span class="chaos-master-label">CHAOS</span>
+						<button class="toggle-btn on" id="chaos-toggle" aria-pressed="true" type="button">
+							<span class="toggle-track"><span class="toggle-thumb"></span></span>
+							<span class="toggle-text">ON</span>
+						</button>
 					</div>
-					<div class="rule">
-						<b>COLUMN SHUFFLE</b>
-						<p>All 7 columns are randomly reordered.</p>
-					</div>
-					<div class="rule">
-						<b>BLIND MOVE</b>
-						<p>Board hides for 2 seconds before your move.</p>
-					</div>
-					<div class="rule">
-						<b>DOUBLE DROP</b>
-						<p>Current player drops two pieces this turn.</p>
-					</div>
-					<div class="rule">
-						<b>ROW CLEAR</b>
-						<p>The bottom row is wiped. Everything settles.</p>
+					<div class="chaos-config-hint">Tap a card to disable that chaos. Greyed = off.</div>
+					<div class="rules" id="chaos-cards">
+						<button type="button" class="rule chaos-card" data-chaos-id="gravity-flip">
+							<b>GRAVITY FLIP</b>
+							<p>Board rotates 180°. Pile reverses, drops come from the new top.</p>
+						</button>
+						<button type="button" class="rule chaos-card" data-chaos-id="column-shuffle">
+							<b>COLUMN SHUFFLE</b>
+							<p>All 7 columns are randomly reordered.</p>
+						</button>
+						<button type="button" class="rule chaos-card" data-chaos-id="blind-move">
+							<b>BLIND MOVE</b>
+							<p>Board hides chip colors until the next move.</p>
+						</button>
+						<button type="button" class="rule chaos-card" data-chaos-id="double-drop">
+							<b>DOUBLE DROP</b>
+							<p>Current player drops two pieces this turn.</p>
+						</button>
+						<button type="button" class="rule chaos-card" data-chaos-id="row-clear">
+							<b>ROW CLEAR</b>
+							<p>The bottom row is wiped. Everything settles.</p>
+						</button>
 					</div>
 				</div>
 			</section>
@@ -633,6 +792,8 @@
 				nextChaosEvent: null, // queued CHAOS_EVENTS entry
 				turnsUntilChaos: 0, // completed turns remaining before queued event fires
 				chaosBag: [], // shuffled queue of CHAOS_EVENTS; refills when empty
+				chaosEnabled: true, // master toggle from start screen
+				chaosEnabledIds: null, // Set of allowed chaos ids (null = all). Set after CHAOS_EVENTS is defined.
 			};
 
 			/* -------- 2) Board Logic -------- */
@@ -1013,19 +1174,31 @@
 				}, GRAVITY_FLIP_MS + 150);
 			}
 
-			// "Bag" randomizer: each event fires once before any repeats. When the bag
-			// empties, we shuffle a fresh copy of CHAOS_EVENTS. The first event of a new
-			// bag is re-rolled if it matches the last event fired, to avoid a repeat
-			// straddling the bag boundary.
+			// Returns the events the player has enabled on the home screen.
+			function getEnabledChaosEvents() {
+				if (!state.chaosEnabled) return [];
+				if (!state.chaosEnabledIds) return CHAOS_EVENTS.slice();
+				return CHAOS_EVENTS.filter((ev) => state.chaosEnabledIds.has(ev.id));
+			}
+
+			// "Bag" randomizer: each enabled event fires once before any repeats. When
+			// the bag empties, we shuffle a fresh copy of the enabled set. The first
+			// event of a new bag is swapped if it matches the previously queued event,
+			// to avoid a repeat straddling the bag boundary.
 			function pickNextChaosEvent() {
+				const pool = getEnabledChaosEvents();
+				if (pool.length === 0) return null;
+				// Drop any queued bag entries that are no longer enabled.
+				if (state.chaosEnabledIds) {
+					state.chaosBag = state.chaosBag.filter((ev) => state.chaosEnabledIds.has(ev.id));
+				}
 				if (state.chaosBag.length === 0) {
-					const fresh = CHAOS_EVENTS.slice();
+					const fresh = pool.slice();
 					for (let i = fresh.length - 1; i > 0; i--) {
 						const j = Math.floor(Math.random() * (i + 1));
 						[fresh[i], fresh[j]] = [fresh[j], fresh[i]];
 					}
-					// Avoid bag-boundary repeats.
-					if (state.nextChaosEvent && fresh[0].id === state.nextChaosEvent.id && fresh.length > 1) {
+					if (state.nextChaosEvent && fresh.length > 1 && fresh[0].id === state.nextChaosEvent.id) {
 						[fresh[0], fresh[1]] = [fresh[1], fresh[0]];
 					}
 					state.chaosBag = fresh;
@@ -1035,15 +1208,19 @@
 
 			function queueNextChaos() {
 				state.nextChaosEvent = pickNextChaosEvent();
-				state.turnsUntilChaos = CHAOS_EVERY;
+				state.turnsUntilChaos = state.nextChaosEvent ? CHAOS_EVERY : Infinity;
 				renderNextChaos();
 			}
 
 			function renderNextChaos() {
 				const el = document.getElementById("next-chaos");
 				if (!el) return;
-				if (!state.nextChaosEvent || !state.running) {
+				if (!state.running) {
 					el.innerHTML = '<span style="color:var(--muted)">—</span>';
+					return;
+				}
+				if (!state.chaosEnabled || !state.nextChaosEvent) {
+					el.innerHTML = '<span style="color:var(--muted)">CHAOS: OFF</span>';
 					return;
 				}
 				const n = state.turnsUntilChaos;
@@ -1052,8 +1229,10 @@
 			}
 
 			function maybeTriggerChaos() {
+				if (!state.chaosEnabled) return false;
+				if (!state.nextChaosEvent) return false;
 				if (state.turnsUntilChaos > 0) return false;
-				const ev = state.nextChaosEvent || pickNextChaosEvent();
+				const ev = state.nextChaosEvent;
 				ev.apply();
 				showBanner("CHAOS: " + ev.label);
 				logChaos(ev.label);
@@ -1351,6 +1530,35 @@
 			document.getElementById("sound-btn").addEventListener("click", (e) => {
 				state.soundOn = !state.soundOn;
 				e.currentTarget.textContent = state.soundOn ? "🔊 SOUND" : "🔇 MUTED";
+			});
+
+			/* Chaos config (start screen) */
+			state.chaosEnabledIds = new Set(CHAOS_EVENTS.map((ev) => ev.id));
+
+			const chaosConfigEl = document.getElementById("chaos-config");
+			const chaosToggleBtn = document.getElementById("chaos-toggle");
+			const chaosToggleText = chaosToggleBtn.querySelector(".toggle-text");
+			chaosToggleBtn.addEventListener("click", () => {
+				state.chaosEnabled = !state.chaosEnabled;
+				chaosToggleBtn.classList.toggle("on", state.chaosEnabled);
+				chaosToggleBtn.classList.toggle("off", !state.chaosEnabled);
+				chaosToggleBtn.setAttribute("aria-pressed", String(state.chaosEnabled));
+				chaosToggleText.textContent = state.chaosEnabled ? "ON" : "OFF";
+				chaosConfigEl.classList.toggle("master-off", !state.chaosEnabled);
+			});
+
+			document.querySelectorAll(".chaos-card").forEach((card) => {
+				card.addEventListener("click", () => {
+					const id = card.dataset.chaosId;
+					if (!id) return;
+					if (state.chaosEnabledIds.has(id)) {
+						state.chaosEnabledIds.delete(id);
+						card.classList.add("disabled");
+					} else {
+						state.chaosEnabledIds.add(id);
+						card.classList.remove("disabled");
+					}
+				});
 			});
 
 			/* Load persisted score */
