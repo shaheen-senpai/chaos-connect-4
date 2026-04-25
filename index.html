@@ -1273,8 +1273,26 @@
 				draw: ["A draw? Unsatisfying for us both."],
 			};
 
+			// Shuffle-bag pick: cycles through a bucket in a random order before any line repeats.
+			const _pickBags = new WeakMap(); // arr -> { order: number[], i: number }
 			function pick(arr) {
-				return arr[Math.floor(Math.random() * arr.length)];
+				if (!arr || arr.length === 0) return "";
+				if (arr.length === 1) return arr[0];
+				let bag = _pickBags.get(arr);
+				if (!bag || bag.i >= bag.order.length) {
+					const order = arr.map((_, i) => i);
+					for (let j = order.length - 1; j > 0; j--) {
+						const k = Math.floor(Math.random() * (j + 1));
+						[order[j], order[k]] = [order[k], order[j]];
+					}
+					// avoid new bag starting with the same line the previous bag ended on
+					if (bag && order[0] === bag.order[bag.order.length - 1]) {
+						[order[0], order[order.length - 1]] = [order[order.length - 1], order[0]];
+					}
+					bag = { order, i: 0 };
+					_pickBags.set(arr, bag);
+				}
+				return arr[bag.order[bag.i++]];
 			}
 
 			function setTalk(msg) {
