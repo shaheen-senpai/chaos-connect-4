@@ -632,6 +632,7 @@
 				soundOn: true,
 				nextChaosEvent: null, // queued CHAOS_EVENTS entry
 				turnsUntilChaos: 0, // completed turns remaining before queued event fires
+				chaosBag: [], // shuffled queue of CHAOS_EVENTS; refills when empty
 			};
 
 			/* -------- 2) Board Logic -------- */
@@ -1012,8 +1013,24 @@
 				}, GRAVITY_FLIP_MS + 150);
 			}
 
+			// "Bag" randomizer: each event fires once before any repeats. When the bag
+			// empties, we shuffle a fresh copy of CHAOS_EVENTS. The first event of a new
+			// bag is re-rolled if it matches the last event fired, to avoid a repeat
+			// straddling the bag boundary.
 			function pickNextChaosEvent() {
-				return CHAOS_EVENTS[Math.floor(Math.random() * CHAOS_EVENTS.length)];
+				if (state.chaosBag.length === 0) {
+					const fresh = CHAOS_EVENTS.slice();
+					for (let i = fresh.length - 1; i > 0; i--) {
+						const j = Math.floor(Math.random() * (i + 1));
+						[fresh[i], fresh[j]] = [fresh[j], fresh[i]];
+					}
+					// Avoid bag-boundary repeats.
+					if (state.nextChaosEvent && fresh[0].id === state.nextChaosEvent.id && fresh.length > 1) {
+						[fresh[0], fresh[1]] = [fresh[1], fresh[0]];
+					}
+					state.chaosBag = fresh;
+				}
+				return state.chaosBag.shift();
 			}
 
 			function queueNextChaos() {
@@ -1150,6 +1167,8 @@
 				state.running = true;
 				state.blinding = false;
 				state.animating = false;
+				state.chaosBag = [];
+				state.nextChaosEvent = null;
 				boardEl.classList.remove("blind");
 				blindEl.classList.add("hidden");
 				queueNextChaos();
